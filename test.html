@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CineView Pro v4.1 - Safe Margin</title>
+    <title>CineView Pro v4.2 - Deep Inset</title>
     <style>
         :root { --accent: #FFD700; --bar-h: 75px; }
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: column; font-family: -apple-system, sans-serif; }
@@ -28,7 +28,7 @@
 <body>
 
 <div id="mask" onclick="init()">
-    <div style="text-align:center;"><h2 style="font-weight:200; letter-spacing:5px;">CINEVIEW</h2><p style="font-size:9px; color:#444;">[ SAFE IN-SET LABELS v4.1 ]</p></div>
+    <div style="text-align:center;"><h2 style="font-weight:200; letter-spacing:5px;">CINEVIEW</h2><p style="font-size:9px; color:#444;">[ DEEP INSET LABELS v4.2 ]</p></div>
 </div>
 
 <div class="top-status">
@@ -74,7 +74,7 @@
                 sync();
                 requestAnimationFrame(render);
             };
-        } catch (e) { alert("Camera Error"); }
+        } catch (e) { alert("Camera Access Required."); }
     }
 
     function sync() {
@@ -106,23 +106,24 @@
             const bw = c.width * ratio, bh = c.height * ratio;
             const bx = (c.width - bw) / 2, by = (c.height - bh) / 2;
 
+            // 极细线宽
             ctx.lineWidth = 1.3 * dpr;
             ctx.strokeStyle = (i === 0) ? "#FFD700" : "rgba(255,255,255,0.7)";
             ctx.setLineDash((parseFloat(f) > 40 || f === 'Tele') ? [10 * dpr, 8 * dpr] : []);
             ctx.strokeRect(bx, by, bw, bh);
 
-            // --- 核心修改：回到内侧，并增加安全内缩间距 ---
+            // --- 极致避让修改：深度内缩 ---
             ctx.save();
-            // textX: 框线右侧内缩 14px; textY: 框线底部内缩 8px
-            const textX = bx + bw - (14 * dpr); 
-            const textY = by + bh - (8 * dpr);
+            // 大幅增加 textX 偏移到 28px，确保文字距离右边框有充足空隙
+            const textX = bx + bw - (28 * dpr); 
+            const textY = by + bh - (12 * dpr);
             
             ctx.translate(textX, textY);
             ctx.rotate(Math.PI / 2); 
             
             ctx.fillStyle = ctx.strokeStyle;
-            ctx.shadowColor = "rgba(0,0,0,0.8)";
-            ctx.shadowBlur = 3 * dpr;
+            ctx.shadowColor = "rgba(0,0,0,0.9)";
+            ctx.shadowBlur = 4 * dpr;
             ctx.font = `${9 * dpr}px monospace`;
             ctx.textAlign = "left"; 
             
@@ -140,7 +141,7 @@
     async function takeSnapshot() {
         const dataUrl = c.toDataURL('image/jpeg', 0.95);
         const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], `CineView_v4.1.jpg`, { type: 'image/jpeg' });
+        const file = new File([blob], `CineView_v4.2.jpg`, { type: 'image/jpeg' });
         if (navigator.share) await navigator.share({ files: [file] });
     }
 
