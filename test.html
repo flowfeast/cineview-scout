@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>CineView Pro - 勘景集成测试</title>
+    <style>
+        :root { --accent: #FFD700; --bar-h: 60px; --bottom-h: 125px; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        
+        /* 顶部状态栏 */
+        .top-bar { height: var(--bar-h); width: 100%; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 100; font-size: 10px; color: #777; border-bottom: 1px solid #222; padding-top: env(safe-area-inset-top); }
+        
+        /* 4:3 锁定取景区域 */
+        #viewport-container { flex: 1; position: relative; width: 100%; display: flex; align-items: center; justify-content: center; background: #050505; overflow: hidden; }
+        #viewfinder { position: relative; aspect-ratio: 4 / 3; height: 95%; background: #000; overflow: hidden; box-shadow: 0 0 50px rgba(0,0,0,1); }
+        
+        video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+
+        /* 底部交互栏 */
+        .bottom-bar { 
+            height: var(--bottom-h); 
+            width: 100%; 
+            background: #000; 
+            display: grid; 
+            grid-template-columns: 75px 75px 1fr 75px; 
+            align-items: center; 
+            padding: 0 10px; 
+            box-sizing: border-box; 
+            border-top: 1px solid #222; 
+            padding-bottom: env(safe-area-inset-bottom);
+            gap: 8px;
+        }
+
+        .focal-list { 
+            display: flex; 
+            justify-content: space-around; 
+            align-items: center; 
+            background: #0a0a0a; 
+            height: 50px; 
+            border-radius: 25px; 
+            padding: 0 10px;
+        }
+        .focal-item { font-size: 13px; font-weight: bold; color: #444; transition: 0.2s; cursor: pointer; }
+        .focal-item.active { color: var(--accent); transform: scale(1.15); }
+        
+        .ctrl-btn { 
+            height: 50px; 
+            border-radius: 8px; 
+            background: #151515; 
+            border: 1px solid #333; 
+            color: #777; 
+            font-size: 9px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: bold; 
+            line-height: 1.2;
+        }
+        .ctrl-btn span { color: var(--accent); font-size: 11px; margin-top: 2px; }
+        
+        .rec-btn { background: #600; border: none; font-size: 12px; color: white; }
+
+        /* 启动遮罩 */
+        #mask { position: fixed; inset: 0; background: #000; z-index: 999; display: flex; align-items: center; justify-content: center; color: var(--accent); text-align: center; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="mask" onclick="init()">
+    <div>
+        <h2 style="letter-spacing: 2px;">CINEVIEW PRO</h2>
+        <p style="font-size: 11px; color: #555;">[ 点击初始化主摄转接系统 ]</p>
+    </div>
+</div>
+
+<div class="top-bar">
+    <div id="status-l">MODE: NATIVE | 1x</div>
+    <div id="device-tag">IPHONE 16 PRO</div>
+    <div id="status-r">4:3 SAFE</div>
+</div>
+
+<div id="viewport-container">
+    <div id="viewfinder">
+        <video id="v" autoplay playsinline muted></video>
+        <canvas id="c"></canvas>
+    </div>
+</div>
+
+<div class="bottom-bar">
+    <div class="ctrl-btn" onclick="switchCam()">CAM<br><span id="cam-label">16P</span></div>
+    <div class="ctrl-btn" onclick="switchFormat()">FMT<br><span id="fmt-label">NATIVE</span></div>
+    <div class="focal-list" id="focal-container"></div>
+    <div class="ctrl-btn rec-btn" onclick="takeSnapshot()">REC</div>
+</div>
+
+<script>
+    const state = {
+        idx: 1, // 默认 16P
+        devs: [
+            {n:'15P', fullName: 'IPHONE 15 PRO', tele:3, teleMM:72}, 
+            {n:'16P', fullName: 'IPHONE 16 PRO', tele:5, teleMM:120}, 
+            {n:'17P', fullName: 'IPHONE 17 PRO', tele:4, teleMM:100}
+        ],
+        fmt: 'NATIVE',
+        focal: '1x',
+        config: {
+            NATIVE: ['1x', 'Tele'],
+            S35: ['16', '21', '32', '40', '50', '75'],
+            FF: ['24', '32', '40', '50', '75']
+        }
+    };
+
+    const v = document.getElementById('v');
+    const c = document.getElementById('c');
+    const ctx = c.getContext('2d');
+
+    async function init() {
+        const mask = document.getElementById('mask');
+        mask.innerHTML = "<div><p>正在连接主摄...</p></div>";
+
+        try {
+            const constraints = {
+                video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+            };
+            
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            }
+
+            v.srcObject = stream;
+            v.setAttribute('autoplay', '');
+            v.setAttribute('muted', '');
+            v.setAttribute('playsinline', 'true');
+            
+            v.onloadedmetadata = () => {
+                v.play();
+                sync();
+                updateUI();
+                mask.style.display = 'none';
+                requestAnimationFrame(renderLoop);
+            };
+        } catch (e) {
+            mask.innerHTML = `<div style="color:#ff4444;padding:20px;"><h3>授权失败</h3><p>请在系统设置中允许 Safari 访问摄像头</p><button onclick="location.reload()" style="background:#333;color:white;border:none;padding:10px 20px;margin-top:10px;border-radius:5px;">重试</button></div>`;
+        }
+    }
+
+    function switchFormat() {
+        const fmts = ['NATIVE', 'S35', 'FF'];
+        state.fmt = fmts[(fmts.indexOf(state.fmt) + 1) % fmts.length];
+        document.getElementById('fmt-label').innerText = state.fmt;
+        state.focal = state.config[state.fmt][0];
+        updateUI();
+    }
+
+    function switchCam() {
+        state.idx = (state.idx + 1) % state.devs.length;
+        document.getElementById('cam-label').innerText = state.devs[state.idx].n;
+        document.getElementById('device-tag').innerText = state.devs[state.idx].fullName;
+        updateUI();
+    }
+
+    function updateUI() {
+        const container = document.getElementById('focal-container');
+        container.innerHTML = '';
+        const list = state.config[state.fmt];
+        
+        list.forEach(f => {
+            const el = document.createElement('span');
+            el.className = `focal-item ${state.focal === f ? 'active' : ''}`;
+            el.innerText = f === 'Tele' ? state.devs[state.idx].tele + 'x' : f;
+            el.onclick = () => { state.focal = f; updateUI(); };
+            container.appendChild(el);
+        });
+        document.getElementById('status-l').innerText = `MODE: ${state.fmt} | ${state.focal === 'Tele' ? state.devs[state.idx].tele + 'x' : state.focal}`;
+    }
+
+    function sync() {
+        const r = document.getElementById('viewfinder').getBoundingClientRect();
+        c.width = r.width;
+        c.height = r.height;
+    }
+
+    function renderLoop() {
+        drawFrame(ctx, c.width, c.height);
+        requestAnimationFrame(renderLoop);
+    }
+
+    function drawFrame(targetCtx, w, h) {
+        targetCtx.clearRect(0, 0, w, h);
+        const baseMM = 24;
+        let targetMM = 24;
+
+        if (state.fmt === 'NATIVE') {
+            targetMM = state.focal === '1x' ? 24 : state.devs[state.idx].teleMM;
+        } else if (state.fmt === 'S35') {
+            targetMM = parseFloat(state.focal) * 1.5;
+        } else {
+            targetMM = parseFloat(state.focal);
+        }
+
+        const ratio = baseMM / targetMM;
+        
+        if (ratio <= 1.01) {
+            const bw = w * ratio;
+            const bh = h * ratio;
+            const bx = (w - bw) / 2;
+            const by = (h - bh) / 2;
+
+            targetCtx.strokeStyle = "#FFD700";
+            targetCtx.lineWidth = 2;
+            targetCtx.strokeRect(bx, by, bw, bh);
+
+            targetCtx.fillStyle = "#FFD700";
+            targetCtx.font = `${Math.max(10, w * 0.025)}px monospace`;
+            const label = state.fmt === 'NATIVE' ? 
+                (state.focal === '1x' ? "1x 24mm" : `${state.devs[state.idx].tele}x ${state.devs[state.idx].teleMM}mm`) : 
+                `${state.fmt} ${state.focal}mm`;
+            targetCtx.fillText(label, bx + 8, by + 22);
+        } else {
+            targetCtx.fillStyle = "rgba(255, 215, 0, 0.5)";
+            targetCtx.font = "10px monospace";
+            targetCtx.fillText("OUT OF FIELD", 10, 20);
+        }
+        
+        targetCtx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+        targetCtx.lineWidth = 1;
+        targetCtx.strokeRect(0, 0, w, h);
+    }
+
+    function takeSnapshot() {
+        const out = document.createElement('canvas');
+        out.width = 1920; out.height = 1440;
+        const oCtx = out.getContext('2d');
+        
+        oCtx.drawImage(v, 0, 0, out.width, out.height);
+        drawFrame(oCtx, out.width, out.height);
+
+        const wmH = 100;
+        oCtx.fillStyle = "rgba(0,0,0,0.7)";
+        oCtx.fillRect(0, out.height - wmH, out.width, wmH);
+        oCtx.fillStyle = "white";
+        oCtx.font = "24px monospace";
+        
+        const info = `PROJ: XUNZI YIJI | MODE: ${state.fmt} | LENS: ${state.focal} | ${state.devs[state.idx].fullName}`;
+        oCtx.fillText(info, 40, out.height - 42);
+
+        const link = document.createElement('a');
+        link.download = `CineScout_${state.fmt}_${state.focal}_${Date.now()}.jpg`;
+        link.href = out.toDataURL('image/jpeg', 0.95);
+        link.click();
+
+        document.body.style.opacity = "0.5";
+        setTimeout(() => document.body.style.opacity = "1", 80);
+    }
+
+    window.addEventListener('resize', sync);
+    window.addEventListener('orientationchange', () => setTimeout(sync, 300));
+</script>
+</body>
+</html>
