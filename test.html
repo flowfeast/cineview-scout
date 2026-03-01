@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CineView Pro v4.3 - Pinning Fix</title>
+    <title>CineView Pro v4.4 - Position Aligned</title>
     <style>
         :root { --accent: #FFD700; --bar-h: 75px; }
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: column; font-family: -apple-system, sans-serif; }
@@ -28,7 +28,7 @@
 <body>
 
 <div id="mask" onclick="init()">
-    <div style="text-align:center;"><h2 style="font-weight:200; letter-spacing:5px;">CINEVIEW</h2><p style="font-size:9px; color:#444;">[ PINNING ALIGNED v4.3 ]</p></div>
+    <div style="text-align:center;"><h2 style="font-weight:200; letter-spacing:5px;">CINEVIEW</h2><p style="font-size:9px; color:#444;">[ RED LABEL ALIGNED v4.4 ]</p></div>
 </div>
 
 <div class="top-status">
@@ -74,7 +74,7 @@
                 sync();
                 requestAnimationFrame(render);
             };
-        } catch (e) { alert("Camera Access Error"); }
+        } catch (e) { alert("Camera Error"); }
     }
 
     function sync() {
@@ -111,27 +111,30 @@
             ctx.setLineDash((parseFloat(f) > 40 || f === 'Tele') ? [10 * dpr, 8 * dpr] : []);
             ctx.strokeRect(bx, by, bw, bh);
 
-            // --- 核心修正：按照“红色标注区”需求对齐位置 ---
+            // --- 核心修正：按照您要求的“红色标注”位置逻辑 ---
             ctx.save();
-            // textX: 位于框线右边缘外侧 (bx + bw + offset)
-            // textY: 位于框线底边对齐 (by + bh)
-            const textX = bx + bw + (8 * dpr); 
-            const textY = by + bh;
+            
+            // 判定是否接近屏幕边缘 (用于处理 16mm/24mm)
+            const marginToEdge = c.width - (bx + bw);
+            const isTooClose = marginToEdge < (45 * dpr); 
+
+            // 如果太窄，标注内缩；否则，标注外侧 (按照红色字体位置)
+            const textX = isTooClose ? (bx + bw - (18 * dpr)) : (bx + bw + (8 * dpr));
+            const textY = by + bh; // 底部物理齐平
             
             ctx.translate(textX, textY);
-            ctx.rotate(Math.PI / 2); // 顺时针旋转 90 度
+            ctx.rotate(Math.PI / 2); 
             
             ctx.fillStyle = ctx.strokeStyle;
             ctx.shadowColor = "rgba(0,0,0,0.8)";
             ctx.shadowBlur = 3 * dpr;
             ctx.font = `${9 * dpr}px monospace`;
-            ctx.textAlign = "right"; // 旋转后，相对于物理视角的对齐方式
+            ctx.textAlign = "right"; // 文字向物理左侧(Canvas上方)生长
             
             const label = (f === 'Tele') ? 
                 (state.devs[state.idx].tmm/24).toFixed(0) + 'x ' + state.devs[state.idx].tmm + 'mm' : 
                 f + "mm";
             
-            // 此时绘制的 label 底部将与框线底边平齐，且位于框线右侧外空地
             ctx.fillText(label, 0, 0);
             ctx.restore();
         });
@@ -142,7 +145,7 @@
     async function takeSnapshot() {
         const dataUrl = c.toDataURL('image/jpeg', 0.95);
         const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], `CineView_v4.3.jpg`, { type: 'image/jpeg' });
+        const file = new File([blob], `CineScout_v4.4.jpg`, { type: 'image/jpeg' });
         if (navigator.share) await navigator.share({ files: [file] });
     }
 
@@ -162,4 +165,5 @@
     window.addEventListener('resize', sync);
 </script>
 </body>
+</html>
 </html>
