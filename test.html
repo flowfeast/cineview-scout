@@ -3,26 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CineView Pro v2.9 - BugFix</title>
+    <title>CineView Pro v3.0 - Fixed Horizontal</title>
     <style>
-        :root { --accent: #FFD700; --bar-h: 50px; --side-w: 80px; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: row; font-family: monospace; }
+        :root { --accent: #FFD700; --side-w: 75px; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: row; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
 
-        /* 左侧状态栏 - 旋转文字以适应横屏构图 */
-        .left-bar { width: 40px; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: space-between; padding: 20px 0; box-sizing: border-box; font-size: 9px; color: #555; border-right: 1px solid #222; }
-        .vertical-text { transform: rotate(-90deg); white-space: nowrap; width: 100px; margin-left: -30px; }
+        /* 左侧固定状态栏 */
+        .left-bar { width: 40px; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 40px 0; box-sizing: border-box; border-right: 1px solid #1a1a1a; z-index: 100; }
+        .v-label { transform: rotate(-90deg); color: #555; font-size: 10px; white-space: nowrap; letter-spacing: 1px; width: 120px; text-align: center; }
 
-        /* 主取景器 - 强制横向 4:3 */
-        #viewport-container { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #050505; }
-        #viewfinder { position: relative; width: 95%; aspect-ratio: 4 / 3; background: #000; overflow: hidden; border: 1px solid #1a1a1a; }
-        video { display: none; } /* 隐藏原生视频，由 Canvas 绘制以处理旋转 */
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        /* 中央取景器：在竖屏中强制 4:3 横向显示 */
+        #viewport-container { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #050505; overflow: hidden; }
+        #viewfinder { position: relative; width: 98%; aspect-ratio: 4 / 3; background: #000; box-shadow: 0 0 40px #000; overflow: hidden; border: 1px solid #222; }
+        video { display: none; } /* 隐藏原生流，仅用作数据源 */
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        /* 右侧操作栏 - 按钮文字竖排版 */
-        .right-bar { width: var(--side-w); height: 100%; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; border-left: 1px solid #222; padding-bottom: env(safe-area-inset-bottom); }
-        .ctrl-btn { width: 55px; height: 55px; border-radius: 50%; background: #111; border: 1px solid #333; color: #777; font-size: 10px; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.2; word-break: break-all; writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; }
-        .ctrl-btn span { color: var(--accent); font-weight: bold; }
-        .rec-btn { background: #400; border-color: #700; color: #fff; }
+        /* 右侧固定操作栏 */
+        .right-bar { width: var(--side-w); height: 100%; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; border-left: 1px solid #1a1a1a; padding-bottom: env(safe-area-inset-bottom); }
+        .ctrl-btn { width: 52px; height: 52px; border-radius: 50%; background: #0a0a0a; border: 1px solid #333; color: #888; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        .ctrl-btn:active { transform: scale(0.9); background: #1a1a1a; }
+        
+        /* 按钮文字竖排版逻辑 */
+        .btn-text { writing-mode: vertical-rl; text-orientation: upright; font-size: 10px; letter-spacing: 3px; font-weight: 300; line-height: 1; }
+        .btn-text span { color: var(--accent); font-weight: 500; }
+        
+        .rec-btn { background: #300; border-color: #600; color: #fff; }
+        .rec-btn:active { background: #f00; }
 
         #mask { position: fixed; inset: 0; background: #000; z-index: 999; display: flex; align-items: center; justify-content: center; color: var(--accent); cursor: pointer; }
     </style>
@@ -30,13 +36,13 @@
 <body>
 
 <div id="mask" onclick="init()">
-    <div><h2 style="font-weight: 200; letter-spacing: 4px;">CINEVIEW</h2><p style="font-size: 9px;">[ START SENSOR ]</p></div>
+    <div style="text-align:center;"><h2 style="font-weight:200; letter-spacing:5px;">CINEVIEW</h2><p style="font-size:9px; color:#444;">[ LOCK HORIZONTAL MODE ]</p></div>
 </div>
 
 <div class="left-bar">
-    <div class="vertical-text" id="status-l">MODE: NATIVE</div>
-    <div class="vertical-text" id="device-tag">IPHONE 17 PRO</div>
-    <div class="vertical-text">4:3 SECURE</div>
+    <div class="v-label" id="status-l">MODE: S35</div>
+    <div class="v-label" id="device-tag">IPHONE 17 PRO</div>
+    <div class="v-label">4:3 SAFE ZONE</div>
 </div>
 
 <div id="viewport-container">
@@ -47,15 +53,15 @@
 </div>
 
 <div class="right-bar">
-    <div class="ctrl-btn rec-btn" onclick="takeSnapshot()">REC</div>
-    <div class="ctrl-btn" onclick="switchFormat()">FMT<br><span id="fmt-label">S35</span></div>
-    <div class="ctrl-btn" onclick="switchCam()">CAM<br><span id="cam-label">17P</span></div>
+    <div class="ctrl-btn rec-btn" onclick="takeSnapshot()"><div class="btn-text">REC</div></div>
+    <div class="ctrl-btn" onclick="switchFormat()"><div class="btn-text">FMT:<span>S35</span></div></div>
+    <div class="ctrl-btn" onclick="switchCam()"><div class="btn-text">BODY:<span>17P</span></div></div>
 </div>
 
 <script>
     const state = {
-        idx: 2, // 默认 17P
-        devs: [{n:'15P', full:'IPHONE 15 PRO', teleMM:72}, {n:'16P', full:'IPHONE 16 PRO', teleMM:120}, {n:'17P', full:'IPHONE 17 PRO', teleMM:100}],
+        idx: 2,
+        devs: [{n:'15P', full:'IPHONE 15 PRO', tmm:72}, {n:'16P', full:'IPHONE 16 PRO', tmm:120}, {n:'17P', full:'IPHONE 17 PRO', tmm:100}],
         fmt: 'S35',
         config: {
             NATIVE: ['1x', 'Tele'],
@@ -70,60 +76,63 @@
 
     async function init() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 1920 } });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: {ideal: 1920} } });
             v.srcObject = stream;
             v.onloadedmetadata = () => {
                 v.play();
                 sync();
                 document.getElementById('mask').style.display = 'none';
-                render();
+                requestAnimationFrame(render);
             };
-        } catch (e) { alert("Camera Access Denied"); }
+        } catch (e) { alert("Please enable camera access in HTTPS."); }
     }
 
     function sync() {
-        const r = document.getElementById('viewfinder').getBoundingClientRect();
-        c.width = 1440; // 强制 Canvas 内部分辨率为横向 4:3
+        // 取景器内部绘图分辨率 (横向 4:3)
+        c.width = 1440;
         c.height = 1080;
     }
 
     function render() {
-        // 1. 绘制底图并修复拉伸（关键：旋转 90 度并裁剪）
+        ctx.clearRect(0, 0, c.width, c.height);
+
+        // 1. 绘制底层画面：旋转 90 度并填充，解决拉伸
         ctx.save();
         ctx.translate(c.width/2, c.height/2);
-        ctx.rotate(Math.PI / 2); // 旋转 90 度
-        // 这里的比例计算是为了让 16:9 的视频填满 4:3 的框而不拉伸
-        const scale = (c.width / v.videoHeight) * 1.0; 
+        ctx.rotate(Math.PI / 2); // 顺时针旋转 90 度
+        
+        // 计算缩放：确保 16:9 的视频源在旋转后填满 4:3 的 Canvas 宽度
+        const vRatio = v.videoWidth / v.videoHeight;
+        const scale = c.width / v.videoHeight;
         ctx.drawImage(v, -v.videoWidth/2, -v.videoHeight/2, v.videoWidth, v.videoHeight);
         ctx.restore();
 
-        // 2. 绘制多框线
+        // 2. 循环绘制多框线
         const list = state.config[state.fmt];
         list.forEach((f, i) => {
             let mm = 24;
-            if (state.fmt === 'NATIVE') mm = (f === '1x') ? 24 : state.devs[state.idx].teleMM;
+            if (state.fmt === 'NATIVE') mm = (f === '1x') ? 24 : state.devs[state.idx].tmm;
             else if (state.fmt === 'S35') mm = parseFloat(f) * 1.5;
             else mm = parseFloat(f);
 
             const ratio = 24 / mm;
             if (ratio > 1.02) return;
 
-            const bw = c.width * ratio; const bh = c.height * ratio;
-            const bx = (c.width - bw) / 2; const by = (c.height - bh) / 2;
+            const bw = c.width * ratio;
+            const bh = c.height * ratio;
+            const bx = (c.width - bw) / 2;
+            const by = (c.height - bh) / 2;
 
             ctx.lineWidth = 3;
             ctx.strokeStyle = (i === 0) ? "#FFD700" : "#FFFFFF";
-            if (parseFloat(f) > 40 || f === 'Tele') ctx.setLineDash([15, 10]); else ctx.setLineDash([]);
+            ctx.setLineDash((parseFloat(f) > 40 || f === 'Tele') ? [15, 10] : []);
             ctx.strokeRect(bx, by, bw, bh);
 
-            // 标注旋转，符合横屏阅读
-            ctx.save();
-            ctx.translate(bx + 10, by + 25);
-            ctx.rotate(-Math.PI / 2); // 文字旋转 90 度以适应横屏阅读
+            // 绘制横向标注文字
             ctx.fillStyle = ctx.strokeStyle;
-            ctx.font = "bold 18px monospace";
-            ctx.fillText(f.includes('x') ? f : f + "mm", 0, 0);
-            ctx.restore();
+            ctx.font = "bold 20px monospace";
+            const label = (f === 'Tele') ? state.devs[state.idx].n.replace('P','x') : f + "mm";
+            ctx.fillText(label, bx + 10, by + 28);
         });
 
         requestAnimationFrame(render);
@@ -132,12 +141,12 @@
     async function takeSnapshot() {
         const dataUrl = c.toDataURL('image/jpeg', 0.95);
         const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], `CineView_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const file = new File([blob], `CineView_Snapshot.jpg`, { type: 'image/jpeg' });
 
         if (navigator.share) {
             try {
-                await navigator.share({ files: [file] });
-            } catch (e) { console.log("Share failed"); }
+                await navigator.share({ files: [file], title: 'CineView Scout' });
+            } catch (e) { console.log("User cancelled share"); }
         } else {
             const link = document.createElement('a');
             link.download = `CineView_${Date.now()}.jpg`;
@@ -149,13 +158,13 @@
     function switchFormat() {
         const fmts = ['NATIVE', 'S35', 'FF'];
         state.fmt = fmts[(fmts.indexOf(state.fmt) + 1) % fmts.length];
-        document.getElementById('fmt-label').innerText = state.fmt;
+        document.querySelector('[onclick="switchFormat()"] span').innerText = state.fmt;
         document.getElementById('status-l').innerText = `MODE: ${state.fmt}`;
     }
 
     function switchCam() {
         state.idx = (state.idx + 1) % state.devs.length;
-        document.getElementById('cam-label').innerText = state.devs[state.idx].n;
+        document.querySelector('[onclick="switchCam()"] span').innerText = state.devs[state.idx].n;
         document.getElementById('device-tag').innerText = state.devs[state.idx].full;
     }
 
