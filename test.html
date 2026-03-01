@@ -3,32 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CineView Pro v3.4</title>
+    <title>CineView Pro v3.6 - Sensor Crop</title>
     <style>
-        :root { --accent: #FFD700; --bar-h: 70px; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: column; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        :root { --accent: #FFD700; --bar-h: 75px; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: column; font-family: -apple-system, sans-serif; }
 
-        /* 顶部状态栏 - 竖拿在顶，横拿在左 */
-        .top-status { height: var(--bar-h); width: 100%; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 25px; box-sizing: border-box; border-bottom: 1px solid #1a1a1a; z-index: 100; padding-top: env(safe-area-inset-top); }
-        .status-item { color: #555; font-size: 11px; letter-spacing: 1px; }
+        /* UI 布局：竖屏上下，横屏左右 */
+        .top-status { height: var(--bar-h); width: 100%; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 25px; box-sizing: border-box; border-bottom: 1px solid #111; z-index: 100; padding-top: env(safe-area-inset-top); }
+        .status-item { color: #555; font-size: 10px; letter-spacing: 1px; font-weight: 300; }
 
-        /* 中央取景器 */
-        #viewport-container { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #050505; overflow: hidden; }
-        #viewfinder { position: relative; width: 95%; height: 95%; display: flex; align-items: center; justify-content: center; }
-        video { width: 100%; height: 100%; object-fit: contain; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #viewport-container { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #000; }
+        #viewfinder { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        video { display: none; } /* 隐藏原生流，完全由 Canvas 接管以实现 Center Crop */
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        /* 底部操作栏 - 竖拿在底，横拿在右 */
-        .bottom-action { height: calc(var(--bar-h) + 30px); width: 100%; background: #000; display: flex; align-items: center; justify-content: space-around; padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid #1a1a1a; }
-        
+        .bottom-action { height: calc(var(--bar-h) + 20px); width: 100%; background: #000; display: flex; align-items: center; justify-content: space-around; padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid #111; }
         .ctrl-btn { width: 55px; height: 55px; border-radius: 50%; background: #0a0a0a; border: 1px solid #333; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         
-        /* 核心修改：按钮文字整体旋转 90 度 */
+        /* 按钮文字：单词整体旋转 90 度 */
         .btn-label { transform: rotate(90deg); color: #888; font-size: 10px; font-weight: 300; white-space: nowrap; letter-spacing: 1px; }
         .btn-label span { color: var(--accent); font-weight: 500; }
-        
-        .rec-btn { background: #200; border-color: #500; }
-        .rec-btn .btn-label { color: #fff; font-weight: bold; }
+        .rec-btn { background: #300; border-color: #600; }
 
         #mask { position: fixed; inset: 0; background: #000; z-index: 999; display: flex; align-items: center; justify-content: center; color: var(--accent); cursor: pointer; }
     </style>
@@ -36,7 +31,7 @@
 <body>
 
 <div id="mask" onclick="init()">
-    <div style="text-align:center;"><h2 style="font-weight:200; letter-spacing:5px;">CINEVIEW</h2><p style="font-size:9px; color:#444;">[ SENSOR ALIGNED ]</p></div>
+    <div style="text-align:center;"><h2 style="font-weight:200; letter-spacing:5px;">CINEVIEW</h2><p style="font-size:9px; color:#444;">[ CENTER CROP MODE ACTIVE ]</p></div>
 </div>
 
 <div class="top-status">
@@ -74,26 +69,42 @@
     const ctx = c.getContext('2d');
 
     async function init() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: {ideal: 1920} } });
-            v.srcObject = stream;
-            v.onloadedmetadata = () => {
-                document.getElementById('mask').style.display = 'none';
-                sync();
-                requestAnimationFrame(render);
-            };
-        } catch (e) { alert("HTTPS required"); }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: {ideal: 1920} } });
+        v.srcObject = stream;
+        v.onloadedmetadata = () => {
+            document.getElementById('mask').style.display = 'none';
+            sync();
+            requestAnimationFrame(render);
+        };
     }
 
     function sync() {
-        c.width = v.videoWidth;
-        c.height = v.videoHeight;
+        // 让 Canvas 绘图表面与其显示的 CSS 尺寸完全 1:1，这是消除拉伸的根本
+        const rect = c.getBoundingClientRect();
+        c.width = rect.width * window.devicePixelRatio;
+        c.height = rect.height * window.devicePixelRatio;
     }
 
     function render() {
         ctx.clearRect(0, 0, c.width, c.height);
+
+        // --- 核心修复：Center Crop 逻辑 (无变形填满) ---
+        const vW = v.videoWidth;
+        const vH = v.videoHeight;
+        const cW = c.width;
+        const cH = c.height;
+
+        // 计算裁切比例，填满 Canvas
+        const scale = Math.max(cW / vW, cH / vH);
+        const drawW = vW * scale;
+        const drawH = vH * scale;
+        const offsetX = (cW - drawW) / 2;
+        const offsetY = (cH - drawH) / 2;
+
+        ctx.drawImage(v, offsetX, offsetY, drawW, drawH);
+
+        // --- 框线逻辑 ---
         const list = state.config[state.fmt];
-        
         list.forEach((f, i) => {
             let mm = 24;
             if (state.fmt === 'NATIVE') mm = (f === '1x') ? 24 : state.devs[state.idx].tmm;
@@ -106,35 +117,30 @@
             const bw = c.width * ratio; const bh = c.height * ratio;
             const bx = (c.width - bw) / 2; const by = (c.height - bh) / 2;
 
-            ctx.lineWidth = 6;
+            ctx.lineWidth = 4 * window.devicePixelRatio;
             ctx.strokeStyle = (i === 0) ? "#FFD700" : "#FFFFFF";
-            ctx.setLineDash((parseFloat(f) > 40 || f === 'Tele') ? [30, 20] : []);
+            ctx.setLineDash((parseFloat(f) > 40 || f === 'Tele') ? [20, 15] : []);
             ctx.strokeRect(bx, by, bw, bh);
 
-            // 标注：顺时针旋转 90 度
+            // 标注旋转 90 度
             ctx.save();
-            ctx.translate(bx + 35, by + 75);
+            ctx.translate(bx + (20 * window.devicePixelRatio), by + (40 * window.devicePixelRatio));
             ctx.rotate(Math.PI / 2); 
             ctx.fillStyle = ctx.strokeStyle;
-            ctx.font = "bold 42px monospace";
-            ctx.fillText(f.includes('x') ? f : f + "mm", 0, 0);
+            ctx.font = `bold ${16 * window.devicePixelRatio}px monospace`;
+            const label = (f === 'Tele') ? (state.devs[state.idx].tmm/24).toFixed(0) + 'x ' + state.devs[state.idx].tmm + 'mm' : f + "mm";
+            ctx.fillText(label, 0, 0);
             ctx.restore();
         });
+
         requestAnimationFrame(render);
     }
 
     async function takeSnapshot() {
         const dataUrl = c.toDataURL('image/jpeg', 0.95);
         const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], `CineScout_${Date.now()}.jpg`, { type: 'image/jpeg' });
-        if (navigator.share) {
-            try { await navigator.share({ files: [file] }); } catch(e){}
-        } else {
-            const link = document.createElement('a');
-            link.download = `CineScout_${Date.now()}.jpg`;
-            link.href = dataUrl;
-            link.click();
-        }
+        const file = new File([blob], `CineView_Crop.jpg`, { type: 'image/jpeg' });
+        if (navigator.share) await navigator.share({ files: [file] });
     }
 
     function switchFormat() {
@@ -150,7 +156,7 @@
         document.getElementById('device-tag').innerText = state.devs[state.idx].full;
     }
 
-    window.addEventListener('resize', sync);
+    window.addEventListener('resize', () => { sync(); });
 </script>
 </body>
 </html>
