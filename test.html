@@ -3,34 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CineView Pro v3.2</title>
+    <title>CineView Pro v3.3</title>
     <style>
         :root { --accent: #FFD700; --side-w: 70px; }
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: row; font-family: -apple-system, sans-serif; }
 
-        /* 左侧固定 */
+        /* 左侧固定状态 */
         .left-bar { width: 45px; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: space-between; padding: 40px 0; box-sizing: border-box; border-right: 1px solid #111; z-index: 100; font-size: 10px; color: #444; }
         .side-tag { writing-mode: vertical-lr; transform: rotate(180deg); text-align: center; letter-spacing: 1px; }
 
-        /* 中央取景 - 纯物理比例 */
+        /* 中央取景器 - 比例跟随物理状态 */
         #viewport-container { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #050505; }
-        #viewfinder { position: relative; width: 95%; height: 90%; display: flex; align-items: center; justify-content: center; }
-        video { width: 100%; height: 100%; object-fit: contain; display: block; }
+        #viewfinder { position: relative; width: 95%; height: 92%; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; object-fit: contain; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 
-        /* 右侧固定 - 按钮文字竖排 */
-        .right-bar { width: var(--side-w); height: 100%; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 25px; border-left: 1px solid #111; }
-        .ctrl-btn { width: 50px; height: 50px; border-radius: 50%; background: #0a0a0a; border: 1px solid #222; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .btn-text { writing-mode: vertical-rl; text-orientation: upright; font-size: 10px; color: #666; font-weight: 300; letter-spacing: 2px; }
+        /* 右侧固定按钮 - 文字竖排 */
+        .right-bar { width: var(--side-w); height: 100%; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; border-left: 1px solid #111; padding-bottom: env(safe-area-inset-bottom); }
+        .ctrl-btn { width: 52px; height: 52px; border-radius: 50%; background: #0a0a0a; border: 1px solid #333; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        .btn-text { writing-mode: vertical-rl; text-orientation: upright; font-size: 10px; color: #777; font-weight: 300; letter-spacing: 2px; line-height: 1.1; }
         .btn-text span { color: var(--accent); font-weight: 400; margin-top: 4px; }
-        .rec-btn { background: #200; border-color: #400; }
+        .rec-btn { background: #300; border-color: #500; }
 
-        #mask { position: fixed; inset: 0; background: #000; z-index: 999; display: flex; align-items: center; justify-content: center; color: var(--accent); }
+        #mask { position: fixed; inset: 0; background: #000; z-index: 999; display: flex; align-items: center; justify-content: center; color: var(--accent); cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="mask" onclick="init()"><div><h2>CINEVIEW</h2><p style="font-size:9px;">[ PHYSICAL ORIENTATION ]</p></div></div>
+<div id="mask" onclick="init()">
+    <div style="text-align:center;"><h2 style="font-weight:200; letter-spacing:5px;">CINEVIEW</h2><p style="font-size:9px; color:#444;">[ PHYSICAL ORIENTATION READY ]</p></div>
+</div>
 
 <div class="left-bar">
     <div class="side-tag" id="status-l">MODE: S35</div>
@@ -67,17 +69,19 @@
     const ctx = c.getContext('2d');
 
     async function init() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: {ideal: 1920} } });
-        v.srcObject = stream;
-        v.onloadedmetadata = () => {
-            document.getElementById('mask').style.display = 'none';
-            sync();
-            render();
-        };
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: {ideal: 1920} } });
+            v.srcObject = stream;
+            v.onloadedmetadata = () => {
+                document.getElementById('mask').style.display = 'none';
+                sync();
+                requestAnimationFrame(render);
+            };
+        } catch (e) { alert("HTTPS Required for Camera"); }
     }
 
     function sync() {
-        // 让 Canvas 分辨率实时匹配视频显示的物理尺寸，彻底解决拉伸
+        // 核心：强制 Canvas 像素分辨率匹配视频原始流，消除所有拉伸
         c.width = v.videoWidth;
         c.height = v.videoHeight;
     }
@@ -98,12 +102,12 @@
             const bw = c.width * ratio; const bh = c.height * ratio;
             const bx = (c.width - bw) / 2; const by = (c.height - bh) / 2;
 
-            ctx.lineWidth = 6; // 增加线宽，因为绘图分辨率高
+            ctx.lineWidth = 6; // 分辨率高，线宽加粗
             ctx.strokeStyle = (i === 0) ? "#FFD700" : "#FFFFFF";
             ctx.setLineDash((parseFloat(f) > 40 || f === 'Tele') ? [30, 20] : []);
             ctx.strokeRect(bx, by, bw, bh);
 
-            // 标注：顺时针旋转 90 度，引导横屏使用
+            // 标注旋转：顺时针 90 度旋转，引导用户横屏阅读
             ctx.save();
             ctx.translate(bx + 30, by + 60);
             ctx.rotate(Math.PI / 2); 
@@ -116,13 +120,12 @@
     }
 
     async function takeSnapshot() {
-        // 导出当前 Canvas 画面，它会自动保持当时的横竖比例
-        const dataUrl = c.toDataURL('image/jpeg', 0.9);
+        const dataUrl = c.toDataURL('image/jpeg', 0.95);
         const blob = await (await fetch(dataUrl)).blob();
         const file = new File([blob], `CineView_${Date.now()}.jpg`, { type: 'image/jpeg' });
 
         if (navigator.share) {
-            await navigator.share({ files: [file] });
+            try { await navigator.share({ files: [file] }); } catch (e) {}
         } else {
             const link = document.createElement('a');
             link.download = `CineView_${Date.now()}.jpg`;
