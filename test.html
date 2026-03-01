@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CineView Pro - 勘景集成测试</title>
+    <title>CineView Pro - 勘景集成版 v2.5</title>
     <style>
-        :root { --accent: #FFD700; --bar-h: 60px; --bottom-h: 125px; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        :root { --accent: #FFD700; --bar-h: 60px; --bottom-h: 120px; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; -webkit-tap-highlight-color: transparent; }
         
         /* 顶部状态栏 */
         .top-bar { height: var(--bar-h); width: 100%; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 100; font-size: 10px; color: #777; border-bottom: 1px solid #222; padding-top: env(safe-area-inset-top); }
@@ -18,7 +18,7 @@
         video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
 
-        /* 底部交互栏 */
+        /* 底部操作栏 */
         .bottom-bar { 
             height: var(--bottom-h); 
             width: 100%; 
@@ -33,17 +33,24 @@
             gap: 8px;
         }
 
-        .focal-list { 
+        /* 静态焦段信息显示 (缩小减细) */
+        .focal-info-list { 
             display: flex; 
             justify-content: space-around; 
             align-items: center; 
             background: #0a0a0a; 
-            height: 50px; 
-            border-radius: 25px; 
-            padding: 0 10px;
+            height: 44px; 
+            border-radius: 22px; 
+            padding: 0 12px;
+            border: 1px solid #1a1a1a;
         }
-        .focal-item { font-size: 13px; font-weight: bold; color: #444; transition: 0.2s; cursor: pointer; }
-        .focal-item.active { color: var(--accent); transform: scale(1.15); }
+        .focal-info-item { 
+            font-size: 11px; 
+            color: #555; 
+            font-weight: 400; 
+            letter-spacing: 0.5px;
+        }
+        .focal-info-item.accent { color: var(--accent); }
         
         .ctrl-btn { 
             height: 50px; 
@@ -71,15 +78,15 @@
 
 <div id="mask" onclick="init()">
     <div>
-        <h2 style="letter-spacing: 2px;">CINEVIEW PRO</h2>
-        <p style="font-size: 11px; color: #555;">[ 点击初始化主摄转接系统 ]</p>
+        <h2 style="letter-spacing: 2px; font-weight: 300;">CINEVIEW PRO</h2>
+        <p style="font-size: 10px; color: #555; margin-top: 10px;">[ INITIALIZING MASTER SENSOR ]</p>
     </div>
 </div>
 
 <div class="top-bar">
-    <div id="status-l">MODE: NATIVE | 1x</div>
+    <div id="status-l">MODE: NATIVE</div>
     <div id="device-tag">IPHONE 16 PRO</div>
-    <div id="status-r">4:3 SAFE</div>
+    <div id="status-r">ALL FRAMELINES</div>
 </div>
 
 <div id="viewport-container">
@@ -92,20 +99,19 @@
 <div class="bottom-bar">
     <div class="ctrl-btn" onclick="switchCam()">CAM<br><span id="cam-label">16P</span></div>
     <div class="ctrl-btn" onclick="switchFormat()">FMT<br><span id="fmt-label">NATIVE</span></div>
-    <div class="focal-list" id="focal-container"></div>
+    <div class="focal-info-list" id="info-container"></div>
     <div class="ctrl-btn rec-btn" onclick="takeSnapshot()">REC</div>
 </div>
 
 <script>
     const state = {
-        idx: 1, // 默认 16P
+        idx: 1,
         devs: [
             {n:'15P', fullName: 'IPHONE 15 PRO', tele:3, teleMM:72}, 
             {n:'16P', fullName: 'IPHONE 16 PRO', tele:5, teleMM:120}, 
             {n:'17P', fullName: 'IPHONE 17 PRO', tele:4, teleMM:100}
         ],
         fmt: 'NATIVE',
-        focal: '1x',
         config: {
             NATIVE: ['1x', 'Tele'],
             S35: ['16', '21', '32', '40', '50', '75'],
@@ -119,34 +125,21 @@
 
     async function init() {
         const mask = document.getElementById('mask');
-        mask.innerHTML = "<div><p>正在连接主摄...</p></div>";
-
         try {
-            const constraints = {
+            const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-            };
-            
-            let stream;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-            } catch (err) {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            }
-
+            });
             v.srcObject = stream;
-            v.setAttribute('autoplay', '');
-            v.setAttribute('muted', '');
             v.setAttribute('playsinline', 'true');
-            
             v.onloadedmetadata = () => {
                 v.play();
                 sync();
-                updateUI();
+                updateInfoUI();
                 mask.style.display = 'none';
                 requestAnimationFrame(renderLoop);
             };
         } catch (e) {
-            mask.innerHTML = `<div style="color:#ff4444;padding:20px;"><h3>授权失败</h3><p>请在系统设置中允许 Safari 访问摄像头</p><button onclick="location.reload()" style="background:#333;color:white;border:none;padding:10px 20px;margin-top:10px;border-radius:5px;">重试</button></div>`;
+            mask.innerHTML = `<div style="color:#ff4444;">授权失败<br><button onclick="location.reload()" style="margin-top:10px;">重试</button></div>`;
         }
     }
 
@@ -154,30 +147,28 @@
         const fmts = ['NATIVE', 'S35', 'FF'];
         state.fmt = fmts[(fmts.indexOf(state.fmt) + 1) % fmts.length];
         document.getElementById('fmt-label').innerText = state.fmt;
-        state.focal = state.config[state.fmt][0];
-        updateUI();
+        document.getElementById('status-l').innerText = `MODE: ${state.fmt}`;
+        updateInfoUI();
     }
 
     function switchCam() {
         state.idx = (state.idx + 1) % state.devs.length;
         document.getElementById('cam-label').innerText = state.devs[state.idx].n;
         document.getElementById('device-tag').innerText = state.devs[state.idx].fullName;
-        updateUI();
+        updateInfoUI();
     }
 
-    function updateUI() {
-        const container = document.getElementById('focal-container');
+    function updateInfoUI() {
+        const container = document.getElementById('info-container');
         container.innerHTML = '';
         const list = state.config[state.fmt];
-        
-        list.forEach(f => {
+        list.forEach((f, i) => {
             const el = document.createElement('span');
-            el.className = `focal-item ${state.focal === f ? 'active' : ''}`;
+            // 第一个焦段（极限焦段）使用金黄色，其余为灰色
+            el.className = `focal-info-item ${i === 0 ? 'accent' : ''}`;
             el.innerText = f === 'Tele' ? state.devs[state.idx].tele + 'x' : f;
-            el.onclick = () => { state.focal = f; updateUI(); };
             container.appendChild(el);
         });
-        document.getElementById('status-l').innerText = `MODE: ${state.fmt} | ${state.focal === 'Tele' ? state.devs[state.idx].tele + 'x' : state.focal}`;
     }
 
     function sync() {
@@ -187,80 +178,101 @@
     }
 
     function renderLoop() {
-        drawFrame(ctx, c.width, c.height);
-        requestAnimationFrame(renderLoop);
-    }
-
-    function drawFrame(targetCtx, w, h) {
-        targetCtx.clearRect(0, 0, w, h);
-        const baseMM = 24;
-        let targetMM = 24;
-
-        if (state.fmt === 'NATIVE') {
-            targetMM = state.focal === '1x' ? 24 : state.devs[state.idx].teleMM;
-        } else if (state.fmt === 'S35') {
-            targetMM = parseFloat(state.focal) * 1.5;
-        } else {
-            targetMM = parseFloat(state.focal);
-        }
-
-        const ratio = baseMM / targetMM;
+        ctx.clearRect(0, 0, c.width, c.height);
+        const list = state.config[state.fmt];
         
-        if (ratio <= 1.01) {
-            const bw = w * ratio;
-            const bh = h * ratio;
-            const bx = (w - bw) / 2;
-            const by = (h - bh) / 2;
+        list.forEach((focalStr, index) => {
+            let targetMM = 24;
+            if (state.fmt === 'NATIVE') {
+                targetMM = (focalStr === '1x') ? 24 : state.devs[state.idx].teleMM;
+            } else if (state.fmt === 'S35') {
+                targetMM = parseFloat(focalStr) * 1.5;
+            } else {
+                targetMM = parseFloat(focalStr);
+            }
 
-            targetCtx.strokeStyle = "#FFD700";
-            targetCtx.lineWidth = 2;
-            targetCtx.strokeRect(bx, by, bw, bh);
+            const ratio = 24 / targetMM;
+            if (ratio > 1.05) return; // 超出视野不绘
 
-            targetCtx.fillStyle = "#FFD700";
-            targetCtx.font = `${Math.max(10, w * 0.025)}px monospace`;
+            const bw = c.width * ratio;
+            const bh = c.height * ratio;
+            const bx = (c.width - bw) / 2;
+            const by = (c.height - bh) / 2;
+
+            // 样式逻辑对齐
+            ctx.lineWidth = 2;
+            if (index === 0) {
+                // 极限框线：金黄色实线
+                ctx.strokeStyle = "#FFD700";
+                ctx.setLineDash([]);
+            } else {
+                // 其余框线：白色
+                ctx.strokeStyle = "#FFFFFF";
+                // 焦段 > 40mm 使用虚线 (S35 下 40mm 等效 60mm，符合 > 40mm 逻辑)
+                if (parseFloat(focalStr) > 40 || (state.fmt === 'NATIVE' && focalStr === 'Tele')) {
+                    ctx.setLineDash([10, 8]);
+                } else {
+                    ctx.setLineDash([]);
+                }
+            }
+
+            ctx.strokeRect(bx, by, bw, bh);
+
+            // 绘制标注
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.font = "9px monospace";
             const label = state.fmt === 'NATIVE' ? 
-                (state.focal === '1x' ? "1x 24mm" : `${state.devs[state.idx].tele}x ${state.devs[state.idx].teleMM}mm`) : 
-                `${state.fmt} ${state.focal}mm`;
-            targetCtx.fillText(label, bx + 8, by + 22);
-        } else {
-            targetCtx.fillStyle = "rgba(255, 215, 0, 0.5)";
-            targetCtx.font = "10px monospace";
-            targetCtx.fillText("OUT OF FIELD", 10, 20);
-        }
-        
-        targetCtx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-        targetCtx.lineWidth = 1;
-        targetCtx.strokeRect(0, 0, w, h);
+                (focalStr === '1x' ? "1x 24mm" : `${state.devs[state.idx].tele}x ${state.devs[state.idx].teleMM}mm`) : 
+                `${state.fmt} ${focalStr}mm`;
+            ctx.fillText(label, bx + 5, by + 12);
+        });
+
+        requestAnimationFrame(renderLoop);
     }
 
     function takeSnapshot() {
         const out = document.createElement('canvas');
         out.width = 1920; out.height = 1440;
         const oCtx = out.getContext('2d');
-        
         oCtx.drawImage(v, 0, 0, out.width, out.height);
-        drawFrame(oCtx, out.width, out.height);
+        
+        // 抓取当前所有框线
+        // (由于渲染函数是实时的，此处简单模拟绘制逻辑)
+        const list = state.config[state.fmt];
+        list.forEach((focalStr, index) => {
+            let targetMM = 24;
+            if (state.fmt === 'NATIVE') targetMM = (focalStr === '1x') ? 24 : state.devs[state.idx].teleMM;
+            else if (state.fmt === 'S35') targetMM = parseFloat(focalStr) * 1.5;
+            else targetMM = parseFloat(focalStr);
+
+            const ratio = 24 / targetMM;
+            if (ratio <= 1.05) {
+                const bw = out.width * ratio; const bh = out.height * ratio;
+                const bx = (out.width - bw) / 2; const by = (out.height - bh) / 2;
+                oCtx.lineWidth = 4; // 导出大图线宽加倍
+                oCtx.strokeStyle = (index === 0) ? "#FFD700" : "#FFFFFF";
+                if (parseFloat(focalStr) > 40 || (state.fmt === 'NATIVE' && focalStr === 'Tele')) oCtx.setLineDash([20, 16]);
+                else oCtx.setLineDash([]);
+                oCtx.strokeRect(bx, by, bw, bh);
+            }
+        });
 
         const wmH = 100;
         oCtx.fillStyle = "rgba(0,0,0,0.7)";
+        oCtx.setLineDash([]);
         oCtx.fillRect(0, out.height - wmH, out.width, wmH);
         oCtx.fillStyle = "white";
         oCtx.font = "24px monospace";
-        
-        const info = `PROJ: XUNZI YIJI | MODE: ${state.fmt} | LENS: ${state.focal} | ${state.devs[state.idx].fullName}`;
-        oCtx.fillText(info, 40, out.height - 42);
+        oCtx.fillText(`PROJ: XUNZI YIJI | MODE: ${state.fmt} | ALL FRAMELINES | ${state.devs[state.idx].fullName}`, 40, out.height - 40);
 
         const link = document.createElement('a');
-        link.download = `CineScout_${state.fmt}_${state.focal}_${Date.now()}.jpg`;
+        link.download = `CineScout_v2.5_${Date.now()}.jpg`;
         link.href = out.toDataURL('image/jpeg', 0.95);
         link.click();
-
-        document.body.style.opacity = "0.5";
-        setTimeout(() => document.body.style.opacity = "1", 80);
     }
 
     window.addEventListener('resize', sync);
-    window.addEventListener('orientationchange', () => setTimeout(sync, 300));
+    window.addEventListener('orientationchange', () => setTimeout(sync, 500));
 </script>
 </body>
 </html>
